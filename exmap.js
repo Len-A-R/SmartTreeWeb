@@ -12,7 +12,7 @@ $(document).ready(function() {
     const branchColors = ['red', 'green', 'blue', 'teal', 'darkviolet', 'firebrick', 'forestgreen', 'gold', 'tomato', 'lightseagreen'];
     const backgroundColors = ['white', '#282923'];
     const textColors = ['black', 'white'];
-    const itemColors = ['whitesmoke', 'black'];
+    const itemColors = ['whitesmoke', 'darkslategray'];
     var themeId = 1;
     var idCounter = 0;
     var canvas = document.getElementById('myCanvas');
@@ -46,6 +46,16 @@ $(document).ready(function() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
     }
+    function changeRect(rect, left, top, width, height){
+        rect.segments[0].point.x = left;
+        rect.segments[0].point.y = top+height;
+        rect.segments[1].point.x = left;
+        rect.segments[1].point.y = top;
+        rect.segments[2].point.x = left+width;
+        rect.segments[2].point.y = top;
+        rect.segments[3].point.x = left+width;
+        rect.segments[3].point.y = top+height;                
+    }
     //------------------------------
     class Tree {
         constructor(){
@@ -62,7 +72,16 @@ $(document).ready(function() {
                 _self._offset.y = _self._offset.y + event.delta.y; 
                 for (let itm of _self.items.values()) _self.paint(itm);
             }
-            this.background.onMouseDrag = doMouseDrag;
+
+            view.onMouseDrag = doMouseDrag;
+            canvas.addEventListener('wheel',function(event){
+                view.zoom += event.wheelDelta / 2000;
+                changeRect(_self.background, view.bounds.left ,view.bounds.top, view.size.width, view.size.height);
+                _self.offset.x = view.bounds.left;
+                _self.offset.y = view.bounds.top;
+                _self.refresh();
+                return false; 
+            }, false);
             return this;
         }
         get offset() {
@@ -243,7 +262,10 @@ $(document).ready(function() {
             let self = this;
             let par = itm.parent;
             let itemExpanded = itm.parentExpanded;
-
+            init();
+            this.background.width = canvas.width;
+            this.background.height = canvas.height;
+            this.background.sendToBack();
             if (itemExpanded) {
                 //line
                 let firstSegment = new Segment({
@@ -268,7 +290,7 @@ $(document).ready(function() {
                     itm.branch.add(startPoint);
                     itm.branch.cubicCurveTo(h1,h2, endPoint);
                     itm.branch.strokeColor = itm.branchColor;
-                    itm.branch.strokeWidth = 1;
+                    itm.branch.strokeWidth = 3;
                 }
                 //text
                 itm.textItem.fillColor = textColors[themeId];
@@ -293,8 +315,8 @@ $(document).ready(function() {
                     self.editText(itm);
                 }
                 if (itm.id === this.focused.id) {
-                    itm.rect.strokeColor = 'red';
-                    itm.rect.strokeWidth = 1;            
+                    itm.rect.strokeColor = 'goldenrod';
+                    itm.rect.strokeWidth = 2;            
                 }
 
                 itm.line.bringToFront();
@@ -330,7 +352,6 @@ $(document).ready(function() {
                 itm.expanderText.bringToFront();
             }
             itm.visible = itm.parentExpanded;
-            view.draw();   
         }
     }
     class Item{
@@ -376,8 +397,8 @@ $(document).ready(function() {
             }
 
             this.branchColor = _branchColor; 
-            this.line = new Path({strokeColor: this.branchColor, strokeWidth: 2});
-            this.branch = new Path({strokeColor: this.branchColor, strokeWidth: 1});
+            this.line = new Path({strokeColor: this.branchColor, strokeWidth: 1});
+            this.branch = new Path({strokeColor: this.branchColor, strokeWidth: 3});
             this.rect = new Path({fillColor: 'whitesmoke'});
             this.expander = new Path.Circle(new Point(this.right, this.y), 8);
             this.expanderText = new PointText({
