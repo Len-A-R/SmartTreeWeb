@@ -6,7 +6,7 @@ body {
 }
 
 /* Scale canvas with resize attribute to full size */
-#myCanvas[resize] {
+canvas[resize] {
     width: 100%;
     height: 100%;
 }

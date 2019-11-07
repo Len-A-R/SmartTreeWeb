@@ -9,7 +9,7 @@ $(document).ready(function() {
     const spaceV=12;
     const spaceH=38;
     const margins={left: 10, right: 10, top:8, bottom: 8};
-    const branchColors = ['red', 'green', 'blue', 'teal', 'darkviolet', 'firebrick', 'forestgreen', 'gold', 'tomato', 'lightseagreen'];
+    const branchColors = ['red', 'green', 'gold', 'teal', 'darkviolet', 'firebrick', 'forestgreen', 'blue', 'tomato', 'lightseagreen'];
     const backgroundColors = ['white', '#282923'];
     const textColors = ['black', 'white'];
     const itemColors = ['whitesmoke', 'darkslategray'];
@@ -77,11 +77,57 @@ $(document).ready(function() {
             canvas.addEventListener('wheel',function(event){
                 view.zoom += event.wheelDelta / 2000;
                 changeRect(_self.background, view.bounds.left ,view.bounds.top, view.size.width, view.size.height);
-                _self.offset.x = view.bounds.left;
-                _self.offset.y = view.bounds.top;
-                _self.refresh();
                 return false; 
             }, false);
+
+            //зуммирование через мультитач
+            let scaling = false;
+            let dist = 0;
+            let scale_factor = 1.0;
+            let curr_scale = 1.0;
+            let max_zoom = 8.0;
+            let min_zoom = 0.5;
+            let distance = function(p1,p2) {
+                return (Math.sqrt(Math.pow((p1.clientX - p2.clientX), 2) + Math.pow((p1.clientY-p2.clientY),2)));
+            }
+            canvas.addEventListener('touchstart', function(event) {
+                event.preventDefault();
+                let tt = event.targetTouches;
+                if (tt.length >=2) {
+                    dist = distance(tt[0], tt[1]);
+                    scaling = true;
+                } else {
+                    scaling = false;
+                }
+            }, false);
+            canvas.addEventListener('touchmove', function(event) {
+                event.preventDefault();
+                let tt = event.targetTouches;
+                if (scaling) {
+                    curr_scale = distance(tt[0],tt[1]) / dist * scale_factor;
+                    view.zoom = scale_factor;
+                    changeRect(_self.background, view.bounds.left ,view.bounds.top, view.size.width, view.size.height);
+                }
+            }, false);
+            canvas.addEventListener('touchend', function(event) {
+                var tt = event.targetTouches;
+                if (tt.length < 2) {
+                    scaling = false;
+                    if (curr_scale < min_zoom) {
+                        scale_factor = min_zoom;
+                    } else {
+                        if (curr_scale > max_zoom) {
+                            scale_factor = max_zoom;
+                        } else {
+                            scale_factor = curr_scale;
+                        }
+                    }
+                    view.zoom = scale_factor;
+                    changeRect(_self.background, view.bounds.left ,view.bounds.top, view.size.width, view.size.height);
+                } else {
+                    scaling = true;
+                }
+            }, false);            
             return this;
         }
         get offset() {
@@ -275,7 +321,7 @@ $(document).ready(function() {
                     point: [this.offset.x + itm.right,this.offset.y + itm.y]
                 }); 
                 itm.line.segments = [firstSegment, secondSegment]; 
-
+                itm.line.strokeWidth = 2;
                 //branch    
                 if (typeof par !== 'undefined') {
                     let startPoint = new Point(this.offset.x + itm.x, this.offset.y+itm.y);
@@ -290,7 +336,8 @@ $(document).ready(function() {
                     itm.branch.add(startPoint);
                     itm.branch.cubicCurveTo(h1,h2, endPoint);
                     itm.branch.strokeColor = itm.branchColor;
-                    itm.branch.strokeWidth = 3;
+                    itm.branch.strokeWidth = 2;
+                    itm.branch.smooth({ type: 'continuous' });
                 }
                 //text
                 itm.textItem.fillColor = textColors[themeId];
@@ -316,7 +363,7 @@ $(document).ready(function() {
                 }
                 if (itm.id === this.focused.id) {
                     itm.rect.strokeColor = 'goldenrod';
-                    itm.rect.strokeWidth = 2;            
+                    itm.rect.strokeWidth = 2;
                 }
 
                 itm.line.bringToFront();
@@ -331,13 +378,13 @@ $(document).ready(function() {
                     itm.expander.onClick = function(event) {
                         if (itm.expanderText.content !== '+') {
                             if (itm.pid !== 0) itm.expanded = !itm.expanded
-                        } else { 
+                        } else {
                             self.append(itm.id, 'New Item');
                         }
                     }
                 }
                 let childCount = this.getChildCount(itm.id);
-                if (childCount === 0) 
+                if (childCount === 0)
                     itm.expanderText.content = '+'
                 else
                     itm.expanderText.content = childCount;
@@ -345,7 +392,7 @@ $(document).ready(function() {
                 itm.expanderText.onClick = function(event) {
                     if (itm.expanderText.content !== '+') {
                         if (itm.pid !== 0) itm.expanded = !itm.expanded
-                    } else { 
+                    } else {
                         self.append(itm.id, 'New Item');
                     }
                 }
@@ -398,7 +445,7 @@ $(document).ready(function() {
 
             this.branchColor = _branchColor; 
             this.line = new Path({strokeColor: this.branchColor, strokeWidth: 1});
-            this.branch = new Path({strokeColor: this.branchColor, strokeWidth: 3});
+            this.branch = new Path({strokeColor: this.branchColor, strokeWidth: 1});
             this.rect = new Path({fillColor: 'whitesmoke'});
             this.expander = new Path.Circle(new Point(this.right, this.y), 8);
             this.expanderText = new PointText({
