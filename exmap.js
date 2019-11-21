@@ -13,11 +13,14 @@ $(document).ready(function() {
     const backgroundColors = ['white', '#282923'];
     const textColors = ['black', 'white'];
     const itemColors = ['whitesmoke', 'darkslategray'];
+    const treeStates = ['none', 'newjoin'];
     var themeId = 1;
     var idCounter = 0;
+    var joinCounter = 0;
     var canvas = document.getElementById('myCanvas');
     var ctx = canvas.getContext("2d");
     var branchColorNum = -1;
+    var joinFrom;
     var isNaN = function(x,y) {
         if (x !== x) 
             return y
@@ -43,8 +46,10 @@ $(document).ready(function() {
     }
     function init()
     {
+        //let toolbar = document.getElementById("toolbar");
         canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        canvas.height = window.innerHeight;//-toolbar.clientHeight;
+        canvas.offsetTop = 0;
     }
     function changeRect(rect, left, top, width, height){
         rect.segments[0].point.x = left;
@@ -56,29 +61,118 @@ $(document).ready(function() {
         rect.segments[3].point.x = left+width;
         rect.segments[3].point.y = top+height;                
     }
+
+    function showIntersections(path1, path2) {
+        var intersections = path1.getIntersections(path2);
+        for (var i = 0; i < intersections.length; i++) {
+            new Path.Circle({
+                center: intersections[i].point,
+                radius: 5,
+                fillColor: '#009dec'
+            }).removeOnMove();
+        }
+    }    
     //------------------------------
     class Tree {
         constructor(){
+            init();
             let _items = new Map();
             this.items = _items;
+            let _joins = new Map();
+            this.joins = _joins;
+
             this._offset = {x:0, y:0};
             this.root =  new Item(this, 0, "CENTRAL TOPIC");
             this._focused = this.root;
             this.background = new Path.Rectangle(new Rectangle(new Point(0,0), new Size(canvas.width,canvas.height)));
-            this.background.fillColor = backgroundColors[themeId]; 
-            let _self = this;
-            let doMouseDrag = function(event) {
-                _self._offset.x = _self._offset.x + event.delta.x;
-                _self._offset.y = _self._offset.y + event.delta.y; 
-                for (let itm of _self.items.values()) _self.paint(itm);
-            }
+            this.background.fillColor = backgroundColors[themeId];
+            this.state = 'none';
 
+            let _newJoin = new Path();
+            var _joinVector = new Point({
+                angle: 0,
+                length: 75
+            });
+            let _self = this;
+            let doMouseUp = function(event) {
+                let join;
+                if (_self.state === 'newjoin'){
+                    let dstItem = _self.mouseOnItem(event.point);
+                    if (dstItem) 
+                        join = new Join(_self, _self.focused, dstItem);
+                    _self.state = 'none';
+                    _newJoin.visible = false;
+                    _self.refresh();
+                }
+            }
+            let doMouseMove = function(event) {
+                if (_self.state === 'newjoin') {
+                    let a = joinFrom.itemRect.center;
+                    let b = event.point;
+                    let joinWidth = Math.sqrt(Math.pow(b.x-a.x,2) + Math.pow(b.y-a.y,2));
+                    let joinAngle = (Math.sin((b.y-a.y) / joinWidth) * 360)-180;
+                    _newJoin.segments = [
+                        [a, null, _joinVector.rotate(joinAngle-180)],
+                        [b, _joinVector.rotate(joinAngle), null]
+                    ];
+                    _newJoin.dashArray = [10,4];
+                    _newJoin.strokeWidth = 3;
+                    _newJoin.strokeColor = 'yellow';
+                    _newJoin.visible = true;
+                    for (let itm of _self.items.values()) {
+                        showIntersections(_newJoin, itm.rect);
+                    }                    
+                }
+
+            }
+            let doMouseDrag = function(event) {
+                if (_self.state === 'none'){
+                    _self._offset.x = _self._offset.x + event.delta.x;
+                    _self._offset.y = _self._offset.y + event.delta.y; 
+                    for (let itm of _self.items.values()) _self.paint(itm);
+                    for (let join of _self.joins.values()) _self.paintJoin(join);    
+                }
+
+            }            
+            view.onMouseUp = doMouseUp;
+            view.onMouseMove = doMouseMove;
             view.onMouseDrag = doMouseDrag;
             canvas.addEventListener('wheel',function(event){
+                let oldZoom = view.zoom;
                 view.zoom += event.wheelDelta / 2000;
                 changeRect(_self.background, view.bounds.left ,view.bounds.top, view.size.width, view.size.height);
                 return false; 
             }, false);
+
+            let btnAddSibling = document.getElementById("addSibling");
+            btnAddSibling.onclick = function(event) {
+                _self.append(_self.focused.pid, "New Sibling")
+            }
+            let btnAddChild = document.getElementById("addChild");
+            btnAddChild.onclick = function(event) {
+                _self.append(_self.focused.id, "New Child")
+            }
+            let btnEditText = document.getElementById("editText");
+            btnEditText.onclick = function(event) {
+                _self.editText(_self.focused);
+            }
+            let btnAddJoin = document.getElementById("addJoin");
+            btnAddJoin.onclick = function(event) {
+                joinFrom = _self.focused;
+                _self.state = 'newjoin'
+            }            
+            let btnDelete = document.getElementById("delete");
+            btnDelete.onclick = function(event) {
+                let par = _self.focused.parent;
+                let prev = _self.prev(_self.focused);
+                _self.remove(_self.focused);
+                if (prev) {
+                    _self.focused = prev;
+                } else {
+                    _self.focused = par;
+                }
+                _self.refresh();
+            }
 
             //зуммирование через мультитач
             let scaling = false;
@@ -162,6 +256,7 @@ $(document).ready(function() {
         append(pid, text){
             let itm =  new Item(this, pid, text);
             this.recalc();
+            this.focused = itm;
             return itm;
         }
         prev(item){
@@ -196,6 +291,12 @@ $(document).ready(function() {
                 if (itm.pid === item.id) {
                     return itm;
                 }
+            }
+        }
+        mouseOnItem(point) {
+            for (let itm of this.items.values()){
+                if (itm.itemRect.contains(point))
+                    return itm;
             }
         }
         getOuterHeight(id){
@@ -298,11 +399,30 @@ $(document).ready(function() {
             if (this.root) {
                 this.calc(this.root.id);
             }
+            for (let join of this.joins.values()) 
+                this.paintJoin(join);
         }
         refresh(){
             this.recalc();
             for (let itm of this.items.values()) 
                 this.paint(itm);
+            for (let join of this.joins.values()) 
+                this.paintJoin(join);
+        }
+        paintJoin(join){
+            let a = join.srcItem.itemRect.center;
+            let b = join.dstItem.itemRect.center;
+            let joinWidth = Math.sqrt(Math.pow(b.x-a.x,2) + Math.pow(b.y-a.y,2));
+            let joinAngle = (Math.sin((b.y-a.y) / joinWidth) * 360)-180;
+            join.joinPath.segments = [
+                [a, null, join.h1],
+                [b, join.h2, null]
+            ];
+            join.joinPath.dashArray = [10,4];
+            join.joinPath.strokeWidth = 3;
+            join.joinPath.strokeColor = 'yellow';
+            join.joinPath.fullySelected = (join === this.focused);
+            join.joinPath.visible = true;
         }
         paint(itm){
             let self = this;
@@ -507,6 +627,12 @@ $(document).ready(function() {
         get top() {
             return this.y-this.height;
         }
+        get itemRect(){
+            return new Rectangle(new Point(this.tree.offset.x+ this.x, this.tree.offset.y+this.top), new Size(this.width, this.height-this.line.strokeWidth-1));
+        }
+        get itemCenterPoint() {
+            return this.itemRect.center;
+        }
         get outerHeight(){
             return this.tree.getOuterHeight(this.id);
         }
@@ -575,11 +701,53 @@ $(document).ready(function() {
             }
         }
     }
+    class Join{
+        constructor(tree,src, dst){
+            let _id = 'join' + newId();
+            this.id = _id;
+            let _tree = tree;
+            this.tree = _tree;
+            this.tree.joins.set(this.id, this);
+            this.srcItem = src;
+            let _dstItem = dst;
+            this._dstItem = _dstItem;
+            this.dstItem = dst;
+            let _joinVector = new Point({
+                angle: 0,
+                length: 75
+            });
+            let a = this.srcItem.itemRect.center;
+            let b = this.dstItem.itemRect.center;
+            let joinWidth = Math.sqrt(Math.pow(b.x-a.x,2) + Math.pow(b.y-a.y,2));
+            let joinAngle = (Math.sin((b.y-a.y) / joinWidth) * 360)-180;
+            let h1 = _joinVector.rotate(joinAngle-180).clone();
+            let h2 = _joinVector.rotate(joinAngle).clone()
+            this.h1 = h1;
+            this.h2 = h2;
+            let joinPath = new Path();
+            this.joinPath = joinPath;
+            let _self = this;
+            joinPath.onMouseDown = function(event) {
+                _self.tree.focused = _self;
+            }
+            // let doMouseDrag = function(event){
+            //     this.srcItem.itemRect.centerPoint;
+            // }
+            return this;
+        }
+        get dstItem(){
+            return this._dstItem;
+        }
+        set dstItem(value){
+            this._dstItem = value;
 
+        }
+    }
 
-    paper.project.clear();
-    init();
+    paper.project.clear();   
     let tree = new Tree();
+  
+
     let tool = new Tool;
     tool.onKeyDown  = function(event) {
         let itm = tree.focused;
