@@ -63,15 +63,25 @@ $(document).ready(function() {
     }
 
     function showIntersections(path1, path2) {
-        var intersections = path1.getIntersections(path2);
-        for (var i = 0; i < intersections.length; i++) {
+        let intersections = path1.getIntersections(path2);
+        for (let i = 0; i < intersections.length; i++) {
             new Path.Circle({
                 center: intersections[i].point,
                 radius: 5,
                 fillColor: '#009dec'
             }).removeOnMove();
         }
-    }    
+    }  
+    function drawArrow(path, a,b, h1, h2){
+        let vector = b.subtract(a);
+        let v1 = h1;
+        let v2 = h2;
+        if (!(v1)) v1 = new Point({angle: vector.angle+90, length: 90});
+        if (!(v2)) v2 = new Point({angle: vector.angle-90, length: 90});
+        path.segments = [[a, null, v1], [b, v2, null]];
+
+    }
+
     //------------------------------
     class Tree {
         constructor(){
@@ -89,17 +99,13 @@ $(document).ready(function() {
             this.state = 'none';
 
             let _newJoin = new Path();
-            var _joinVector = new Point({
-                angle: 0,
-                length: 75
-            });
             let _self = this;
             let doMouseUp = function(event) {
                 let join;
                 if (_self.state === 'newjoin'){
                     let dstItem = _self.mouseOnItem(event.point);
                     if (dstItem) 
-                        join = new Join(_self, _self.focused, dstItem);
+                        join = new Join(_self, _self.focused, dstItem, event.point);
                     _self.state = 'none';
                     _newJoin.visible = false;
                     _self.refresh();
@@ -109,19 +115,21 @@ $(document).ready(function() {
                 if (_self.state === 'newjoin') {
                     let a = joinFrom.itemRect.center;
                     let b = event.point;
-                    let joinWidth = Math.sqrt(Math.pow(b.x-a.x,2) + Math.pow(b.y-a.y,2));
-                    let joinAngle = (Math.sin((b.y-a.y) / joinWidth) * 360)-180;
-                    _newJoin.segments = [
-                        [a, null, _joinVector.rotate(joinAngle-180)],
-                        [b, _joinVector.rotate(joinAngle), null]
-                    ];
                     _newJoin.dashArray = [10,4];
                     _newJoin.strokeWidth = 3;
                     _newJoin.strokeColor = 'yellow';
                     _newJoin.visible = true;
+                    drawArrow(_newJoin, a,b);
+                    // let joinWidth = Math.sqrt(Math.pow(b.x-a.x,2) + Math.pow(b.y-a.y,2));
+                    // let joinAngle = (Math.sin((b.y-a.y) / joinWidth) * 360)-180;
+                    // _newJoin.segments = [
+                    //     [a, null, _joinVector.rotate(joinAngle-180)],
+                    //     [b, _joinVector.rotate(joinAngle), null]
+                    // ];
+
                     for (let itm of _self.items.values()) {
                         showIntersections(_newJoin, itm.rect);
-                    }                    
+                    }
                 }
 
             }
@@ -410,19 +418,11 @@ $(document).ready(function() {
                 this.paintJoin(join);
         }
         paintJoin(join){
-            let a = join.srcItem.itemRect.center;
-            let b = join.dstItem.itemRect.center;
-            let joinWidth = Math.sqrt(Math.pow(b.x-a.x,2) + Math.pow(b.y-a.y,2));
-            let joinAngle = (Math.sin((b.y-a.y) / joinWidth) * 360)-180;
-            join.joinPath.segments = [
-                [a, null, join.h1],
-                [b, join.h2, null]
-            ];
-            join.joinPath.dashArray = [10,4];
-            join.joinPath.strokeWidth = 3;
-            join.joinPath.strokeColor = 'yellow';
-            join.joinPath.fullySelected = (join === this.focused);
+            let a = join.srcItem.itemRect.center.add(join.d1);
+            let b = join.dstItem.itemRect.center.add(join.d2);
+             join.joinPath.fullySelected = (join === this.focused);
             join.joinPath.visible = true;
+            drawArrow(join.joinPath, a,b, join.h1, join.h2);
         }
         paint(itm){
             let self = this;
@@ -558,7 +558,7 @@ $(document).ready(function() {
                 _branchColor = branchColors[branchColorNum % branchColors.length];
             } else {
                 if (this.pid === 0) 
-                    _branchColor = 'black'
+                    _branchColor = 'white'
                 else    
                     _branchColor = this.parent.branchColor;          
             }
@@ -702,7 +702,7 @@ $(document).ready(function() {
         }
     }
     class Join{
-        constructor(tree,src, dst){
+        constructor(tree,src, dst, point){
             let _id = 'join' + newId();
             this.id = _id;
             let _tree = tree;
@@ -712,19 +712,55 @@ $(document).ready(function() {
             let _dstItem = dst;
             this._dstItem = _dstItem;
             this.dstItem = dst;
-            let _joinVector = new Point({
-                angle: 0,
-                length: 75
-            });
+            //начальные точки в абсолютных координатах
             let a = this.srcItem.itemRect.center;
             let b = this.dstItem.itemRect.center;
-            let joinWidth = Math.sqrt(Math.pow(b.x-a.x,2) + Math.pow(b.y-a.y,2));
-            let joinAngle = (Math.sin((b.y-a.y) / joinWidth) * 360)-180;
-            let h1 = _joinVector.rotate(joinAngle-180).clone();
-            let h2 = _joinVector.rotate(joinAngle).clone()
-            this.h1 = h1;
-            this.h2 = h2;
+            let joinVector = b.subtract(a);
+            let h1 = new Point({angle: joinVector.angle+90, length: 90});
+            let h2 = new Point({angle: joinVector.angle-90, length: 90});
+            this.h1 = h1;// вершина начала в относительных координатах
+            this.h2 = h2;// вершина конца  в относительных координатах
             let joinPath = new Path();
+            joinPath.visible = false;
+            drawArrow(joinPath, a,point, h1, h2);
+
+            let intersections = joinPath.getIntersections(this.srcItem.rect);
+            let srcPoint = intersections[0].point;
+
+            intersections = joinPath.getIntersections(this.dstItem.rect);
+            let dstPoint = intersections[intersections.length-1].point;
+
+            joinVector = dstPoint.subtract(srcPoint);
+            h2.angle = joinVector.angle-90;
+            drawArrow(joinPath,srcPoint,dstPoint, h1, h2);
+            joinPath.strokeColor = src.branchColor;
+            joinPath.selectedColor = src.branchColor;
+            joinPath.dashArray = [2,2];
+            joinPath.strokeWidth = 3;
+            joinPath.visible = true;
+
+            let joinArrow = new PathItem.create([[0,0],[5,20],[10,0]]);
+            joinArrow.closed = true;
+            joinArrow.fillColor = src.branchColor;
+            joinArrow.position = joinPath.lastSegment.point;
+            
+            joinArrow.rotate(joinVector.angle); 
+
+            // let d1 = dSrc.subtract(a); //начало отрезка относительно центра srcItem
+            // let d2 = dDst.subtract(b); //конец отрезка относительно центра dstItem
+            // // h2 = b.add(d2.normalize(15));
+            // // this.h2 = h2;// вершина конца  в относительных координатах
+            // this.d1 = d1;
+            // this.d2 = d2;
+            // let end = joinPath.lastSegment.point; //конец отрезка в абсолютных координатах
+            // let vector = dDst.subtract(h2);
+            // let arrowVector = vector.normalize(20).clone();
+            // let pointA = end.subtract(arrowVector.rotate(20)).clone();
+            // let pointB = end.subtract(arrowVector.rotate(-20)).clone();
+            // let arrow = new Path(end, pointA, pointB);
+            // arrow.closed = true;
+            // arrow.fillColor = src.branchColor;
+            // arrow.strokeWidth = 1;
             this.joinPath = joinPath;
             let _self = this;
             joinPath.onMouseDown = function(event) {
@@ -784,7 +820,7 @@ $(document).ready(function() {
         }
         if (typeof itm !== 'undefined') tree.focused = itm;
     }    
-
+    paper.settings.handleSize = 15;
     let item1 = tree.append(tree.root.id, "Chapter 1");
     let item2 = tree.append(tree.root.id, "Chapter 2");
     let item3 = tree.append(tree.root.id, "Chapter 3");
