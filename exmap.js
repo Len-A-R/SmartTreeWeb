@@ -781,7 +781,7 @@ $(document).ready(function() {
 
             let path = new Path();
             drawArrow(path, srcPoint,dstPoint, srcHandle, dstHandle);
-            path.middlePoint()
+            //path.middlePoint()
             path.strokeColor = this.srcItem.branchColor;
             path.dashArray = [3,1];
             path.strokeWidth = 5;
