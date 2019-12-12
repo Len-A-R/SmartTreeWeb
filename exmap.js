@@ -6,7 +6,7 @@ $(document).ready(function() {
     const defaultWidth = 100;
     const defaultHeight = 30;
     const expanderRadius = 8;
-    const spaceV=0;
+    const spaceV=10;
     const spaceH=38;
     const margins={left: 10, right: 10, top:8, bottom: 8};
     const branchColors = ['red', 'green', 'gold', 'teal', 'darkviolet', 'firebrick', 'forestgreen', 'blue', 'tomato', 'lightseagreen'];
@@ -33,13 +33,18 @@ $(document).ready(function() {
         return idCounter;
     }
     //------------функции измерения
-    function getTextWidth(text, font) {
+    function getTextWidth(text, fontFamily, fontSize, fontWeight) {
         // let cvs = document.getElementById('myCanvas');
         // let ctx = cvs.getContext("2d");
-        let sText = text;
-        ctx.font = font;
-        let metrics = ctx.measureText(sText);
-        return metrics.width;
+        let path = new PointText(new Point(0,0));
+        path.fontFamily = fontFamily;
+        path.fontSize = fontSize;
+        path.fontWeight = fontWeight;
+        path.content = text;
+        path.visible = false;
+        let size = new Size(path.bounds.width, path.bounds.height);
+        path.remove();
+        return size;
     }
     function getRandomInt(max) {
         return Math.floor(Math.random() * Math.floor(max));
@@ -103,14 +108,15 @@ $(document).ready(function() {
             this.items = _items;
             let _joins = new Map();
             this.joins = _joins;
-
+            let group = new Group();
+            this.group = group;
             this._offset = {x:0, y:0};
             this.root =  new Item(this, 0, "CENTRAL TOPIC");
             this._focused = this.root;
             this.background = new Path.Rectangle(new Rectangle(new Point(0,0), new Size(canvas.width,canvas.height)));
             this.background.fillColor = backgroundColors[themeId];
             this.state = 'none';
-
+            
             //текст
             let infoText_ = new PointText({
                 content: "",
@@ -120,6 +126,7 @@ $(document).ready(function() {
                 fontSize: 12,
                 position: [30,30],
             });
+
             this.infoText = infoText_;
 
             this.info = 'здесь информация'; 
@@ -129,8 +136,10 @@ $(document).ready(function() {
                 let join;
                 if (_self.state === 'newjoin'){
                     let dstItem = _self.mouseOnItem(event.point);
-                    if (dstItem) 
-                        join = new Join(_self, _self.focused, dstItem, event.point);
+                    if (dstItem) {
+                        let txt = prompt('Введите текст', 'New join');
+                        join = new Join(_self, _self.focused, dstItem, event.point, txt);
+                    }
                     _self.state = 'none';
                     _newJoin.visible = false;
                     _self.refresh();
@@ -161,10 +170,12 @@ $(document).ready(function() {
             }
             let doMouseDrag = function(event) {
                 if (_self.state === 'none'){
-                    _self._offset.x = _self._offset.x + event.delta.x;
-                    _self._offset.y = _self._offset.y + event.delta.y; 
-                    for (let itm of _self.items.values()) _self.paint(itm);
-                    for (let join of _self.joins.values()) _self.paintJoin(join);    
+                    _self.group.position.x += event.delta.x;
+                    _self.group.position.y += event.delta.y;
+                    _self._offset.x += event.delta.x;
+                    _self._offset.y += event.delta.y; 
+                    // for (let itm of _self.items.values()) _self.paint(itm);
+                    // for (let join of _self.joins.values()) _self.paintJoin(join);    
                 }
 
             }            
@@ -180,20 +191,24 @@ $(document).ready(function() {
 
             let btnAddSibling = document.getElementById("addSibling");
             btnAddSibling.onclick = function(event) {
-                _self.append(_self.focused.pid, "New Sibling")
+                _self.append(_self.focused.pid, "New Sibling");
+                btnAddSibling.blur();
             }
             let btnAddChild = document.getElementById("addChild");
             btnAddChild.onclick = function(event) {
-                _self.append(_self.focused.id, "New Child")
+                _self.append(_self.focused.id, "New Child");
+                btnAddChild.blur();
             }
             let btnEditText = document.getElementById("editText");
             btnEditText.onclick = function(event) {
                 _self.editText(_self.focused);
+                btnEditText.blur();
             }
             let btnAddJoin = document.getElementById("addJoin");
             btnAddJoin.onclick = function(event) {
                 joinFrom = _self.focused;
                 _self.state = 'newjoin'
+                btnAddJoin.blur();
             }            
             let btnDelete = document.getElementById("delete");
             btnDelete.onclick = function(event) {
@@ -206,6 +221,7 @@ $(document).ready(function() {
                     _self.focused = par;
                 }
                 _self.refresh();
+                btnDelete.blur();
             }
 
             //зуммирование через мультитач
@@ -454,7 +470,7 @@ $(document).ready(function() {
             let b = join.dstItem.itemRect.center.add(join.dstDelta);
             join.path.fullySelected = (join === this.focused);
             join.path.visible = true;
-            drawArrow(join.path, a,b, join.h1, join.h2);
+            drawArrow(join.path, a,b, join.h1, join.h2, join.text);
         }
         paint(itm){
             let self = this;
@@ -490,6 +506,7 @@ $(document).ready(function() {
                     itm.branch.strokeColor = itm.branchColor;
                     itm.branch.strokeWidth = 2;
                     itm.branch.smooth({ type: 'continuous' });
+                    this.group.addChild(itm.branch);
                 }
                 //text
                 itm.textItem.fillColor = textColors[themeId];
@@ -506,6 +523,8 @@ $(document).ready(function() {
                 let corner = new Size(3,3);
                 itm.rect.remove();
                 itm.rect = new Path.Rectangle(bkRect, corner);
+                this.group.addChild(itm.rect);
+
                 itm.rect.fillColor = itemColors[themeId];
                 itm.rect.onClick = function(event) {
                     self.focused = itm;
@@ -534,6 +553,7 @@ $(document).ready(function() {
                             self.append(itm.id, 'New Item');
                         }
                     }
+                    this.group.addChild(itm.expander)
                 }
                 let childCount = this.getChildCount(itm.id);
                 if (childCount === 0)
@@ -579,6 +599,7 @@ $(document).ready(function() {
                 fontWeight: "italic",
                 fontSize: 16,
             });
+            tree.group.addChild(this.textItem);
 
             let _x = 0;
             let _y = this._height; 
@@ -594,12 +615,20 @@ $(document).ready(function() {
                 else    
                     _branchColor = this.parent.branchColor;          
             }
-
             this.branchColor = _branchColor; 
+
             this.line = new Path({strokeColor: this.branchColor, strokeWidth: 1});
+            tree.group.addChild(this.line);
+            
             this.branch = new Path({strokeColor: this.branchColor, strokeWidth: 1});
+            tree.group.addChild(this.branch);
+            
             this.rect = new Path({fillColor: 'whitesmoke'});
+            tree.group.addChild(this.rect);
+            
             this.expander = new Path.Circle(new Point(this.right, this.y), 8);
+            tree.group.addChild(this.expander);
+            
             this.expanderText = new PointText({
                 content: "0",
                 fillColor: 'black',
@@ -607,11 +636,10 @@ $(document).ready(function() {
                 fontWeight: "",
                 fontSize: 12,
             });
-
+            tree.group.addChild(this.expanderText);
+            
             this.textItem.bringToFront;
             this.text = text;
- 
-
             this._visible = true;
             return this;
         }
@@ -707,8 +735,8 @@ $(document).ready(function() {
         set text(value){
             if (this.textItem.content !== value) {
                 this.textItem.content = value;
-                let tw = getTextWidth(this.textItem.content, `${this.textItem.fontSize}px ${this.textItem.fontFamily} ${this.textItem.fontWeight}`);
-                this.width = margins.left + tw + margins.right;
+                let tw = getTextWidth(this.textItem.content, `${this.textItem.fontFamily}`, `${this.textItem.fontSize}px`,  `${this.textItem.fontWeight}`);
+                this.width = margins.left + tw.width + margins.right;
                 this.tree.recalc();
             }
         }
@@ -734,7 +762,7 @@ $(document).ready(function() {
         }
     }
     class Join{
-        constructor(tree,srcItem, dstItem, toPoint){
+        constructor(tree,srcItem, dstItem, toPoint, text){
             let _id = 'join' + newId();
             this.id = _id;
             let _tree = tree;
@@ -744,6 +772,7 @@ $(document).ready(function() {
             let _dstItem = dstItem;
             this._dstItem = _dstItem;
             this.dstItem = _dstItem;
+            
             //начальные точки в абсолютных координатах
             let srcCenter = this.srcItem.itemRect.center.clone();
             let dstCenter = toPoint.clone();// this.dstItem.itemRect.center.clone();
@@ -779,22 +808,48 @@ $(document).ready(function() {
             srcHandle = new Point({angle: joinVector.angle -30, length:100});
             dstHandle = new Point({angle: joinVector.angle +180 -30, length:100});
 
+            let fillColor = this.srcItem.branchColor;
+            this.fillColor = fillColor;
+
             let path = new Path();
             drawArrow(path, srcPoint,dstPoint, srcHandle, dstHandle);
-            //path.middlePoint()
-            path.strokeColor = this.srcItem.branchColor;
+            path.strokeColor = this.fillColor;
             path.dashArray = [3,1];
             path.strokeWidth = 5;
             path.visible = true;
-
             this.path = path;
+            tree.group.addChild(this.path);
+
+            let textPath = new PointText(this.middlePoint);
+            textPath.fillColor = 'white';
+            textPath.justification = 'center';
+            //textPath.position.x += textPath.bounds.width/2;
+            this.textPath = textPath;
+            tree.group.addChild(this.textPath);
+            let join = this;
+            textPath.onMouseDown = function(event) {
+                tree.focused = join;
+            }
+            let backRect = new Path.Rectangle(this.middlePoint, new Size(0,0));
+            this.backRect =  backRect;
+            tree.group.addChild(this.backRect); 
+
+            this.text = text;
             let _self = this;
+            textPath.onDoubleClick = function(event){
+                let txt = prompt('Введите текст соединения:', _self.text);
+                if ((_self.text !== txt) && (txt !== null))
+                    _self.text = txt;
+            }
+            
             path.onMouseDown = function(event) {
                 _self.tree.focused = _self;
             }
-            // let doMouseDrag = function(event){
-            //     this.srcItem.itemRect.centerPoint;
-            // }
+            path.onDoubleClick = function(event){
+                let txt = prompt('Введите текст соединения:', _self.text);
+                if ((_self.text !== txt) && (txt !== null))
+                    _self.text = txt;
+            }            
             return this;
         }
         get dstItem(){
@@ -804,6 +859,39 @@ $(document).ready(function() {
             this._dstItem = value;
 
         }
+        get middlePoint(){
+            let middlePath = this.path.splitAt(this.path.length/2);
+            let middlePoint = middlePath.firstSegment.point.clone();
+            middlePath.remove();
+            return middlePoint;
+        }
+        get text(){
+            return this.textPath.content;
+        }
+        set text(value){
+            this.textPath.content = value;
+            //let tw = getTextWidth(this.textPath.content, `${this.textPath.fontFamily}`, `${this.textPath.fontSize}px`,  `${this.textPath.fontWeight}`);
+            let rc = this.textPath.bounds.clone();
+            rc.left -= 5;
+            rc.top -= 3;
+            rc.width += 10;
+            rc.height += 6;
+
+            let cornerSize = new Size (6,6);
+            this.backRect.remove();
+            this.backRect = new Path.Rectangle(rc, cornerSize);
+            this.backRect.strokeColor = this.fillColor;
+            this.backRect.strokeWidth = 2;
+            this.backRect.fillColor = this.fillColor;
+            //this.backRect.fillColor = backgroundColors[themeId];
+            this.backRect.insertBelow(this.textPath);
+            let tree = this.tree;
+            let join = this;
+            this.backRect.onMouseDown = function(event) {
+                tree.focused = join;
+            }
+        }
+
     }
 
     paper.project.clear();   
@@ -833,8 +921,9 @@ $(document).ready(function() {
                 itm = tree.append(tree.focused.id, "Новый топик");
                 break;
             case 'enter':
-                if (itm.pid !== 0) 
+                if (itm.pid !== 0) { 
                     itm = tree.append(tree.focused.pid, "Новый топик");
+                }
                 break;
             case 'delete':
                 let par = itm.parent;
@@ -845,6 +934,7 @@ $(document).ready(function() {
                 break;
         }
         if (typeof itm !== 'undefined') tree.focused = itm;
+        return false;
     }    
     paper.settings.handleSize = 2;
     let item1 = tree.append(tree.root.id, "Chapter 1");
