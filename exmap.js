@@ -6,7 +6,7 @@ $(document).ready(function() {
     const defaultWidth = 100;
     const defaultHeight = 30;
     const expanderRadius = 8;
-    const spaceV=10;
+    const spaceV=8;
     const spaceH=38;
     const margins={left: 10, right: 10, top:8, bottom: 8};
     const branchColors = ['red', 'green', 'gold', 'teal', 'darkviolet', 'firebrick', 'forestgreen', 'blue', 'tomato', 'lightseagreen'];
@@ -14,13 +14,14 @@ $(document).ready(function() {
     const textColors = ['black', 'white'];
     const itemColors = ['whitesmoke', 'darkslategray'];
     const treeStates = ['none', 'newjoin'];
-    var themeId = 1;
+    var themeId = 0;
     var idCounter = 0;
     var joinCounter = 0;
     var canvas = document.getElementById('myCanvas');
     var ctx = canvas.getContext("2d");
     var branchColorNum = -1;
     var joinFrom;
+  
     var isNaN = function(x,y) {
         if (x !== x) 
             return y
@@ -77,6 +78,9 @@ $(document).ready(function() {
             }).removeOnMove();
         }
     }  
+    function isIntersected(path1, path2){
+        return ((path1.getIntersections(path2).length > 0) || path1.contains(path2.bounds));
+    }
     function drawArrow(path, a,b, h1, h2, event){
         let vector = b.subtract(a);
         let v1 = h1;
@@ -116,6 +120,8 @@ $(document).ready(function() {
             this.background = new Path.Rectangle(new Rectangle(new Point(0,0), new Size(canvas.width,canvas.height)));
             this.background.fillColor = backgroundColors[themeId];
             this.state = 'none';
+            let selected = [];
+            this.selected = selected;
             
             //текст
             let infoText_ = new PointText({
@@ -132,8 +138,33 @@ $(document).ready(function() {
             this.info = 'здесь информация'; 
             let _newJoin = new Path();
             let _self = this;
+
+            let selectionPath = new Path();
+            selectionPath.strokeWidth = 1;
+            selectionPath.strokeColor = 'skyblue';
+            selectionPath.segments = [{point: {x: 0, y:0}}, {point: {x:0,y:0}}, {point:{x:0, y:0}}, {point:{x:0, y:0}}];
+            this.selectionPath = selectionPath;
+            let _selectionRect = new Rectangle({from:[0,0], to: [0,0]});
+            selectionPath.strokeWidth = 2;
+            selectionPath.strokeColor = 'royalblue';
+            selectionPath.fillColor = 'royalblue';
+            selectionPath.fillColor.alpha = 0.5;
+            this._selectionRect = _selectionRect;
+            this.selectionRect = _self._selectionRect;
+            let mouseDownPoint = new Point(0,0);
+            let pressTimer;
+            let doMouseDown = function(event){
+                if ((_self.state === 'none') && (event.event.ctrlKey)){
+                    _self.state = 'selection'; 
+                    mouseDownPoint = event.point;
+                    //_self.selectionRect.from = event.point;
+                    _self.selectionPath.visible = true;
+                    _self.selectionRect = new Rectangle({from: event.point, to: event.point});
+                }
+            }
             let doMouseUp = function(event) {
                 let join;
+                clearTimeout(pressTimer);
                 if (_self.state === 'newjoin'){
                     let dstItem = _self.mouseOnItem(event.point);
                     if (dstItem) {
@@ -143,6 +174,11 @@ $(document).ready(function() {
                     _self.state = 'none';
                     _newJoin.visible = false;
                     _self.refresh();
+                }
+                if (_self.state === 'selection') {
+                    _self.selectionRect = new Rectangle({from: mouseDownPoint, to: event.point});
+                    _self.selectionPath.visible = false;
+                    _self.state = 'none';
                 }
             }
             let doMouseMove = function(event) {
@@ -155,18 +191,10 @@ $(document).ready(function() {
                     _newJoin.strokeColor = 'yellow';
                     _newJoin.visible = true;
                     drawArrow(_newJoin, a,b);
-                    // let joinWidth = Math.sqrt(Math.pow(b.x-a.x,2) + Math.pow(b.y-a.y,2));
-                    // let joinAngle = (Math.sin((b.y-a.y) / joinWidth) * 360)-180;
-                    // _newJoin.segments = [
-                    //     [a, null, _joinVector.rotate(joinAngle-180)],
-                    //     [b, _joinVector.rotate(joinAngle), null]
-                    // ];
-
                     for (let itm of _self.items.values()) {
                         showIntersections(_newJoin, itm.rect);
                     }
                 }
-
             }
             let doMouseDrag = function(event) {
                 if (_self.state === 'none'){
@@ -174,14 +202,20 @@ $(document).ready(function() {
                     _self.group.position.y += event.delta.y;
                     _self._offset.x += event.delta.x;
                     _self._offset.y += event.delta.y; 
-                    // for (let itm of _self.items.values()) _self.paint(itm);
-                    // for (let join of _self.joins.values()) _self.paintJoin(join);    
                 }
+                if (_self.state === 'selection'){
+                    _self.selectionRect = new Rectangle({from: mouseDownPoint, to: event.point});
+                    for (let itm of _self.items.values()) {
+                        itm.selected = (isIntersected(_self.selectionPath, itm.rect));
+                    } 
+                }
+            }         
 
-            }            
+            view.onMouseDown = doMouseDown;
             view.onMouseUp = doMouseUp;
             view.onMouseMove = doMouseMove;
             view.onMouseDrag = doMouseDrag;
+
             canvas.addEventListener('wheel',function(event){
                 let oldZoom = view.zoom;
                 view.zoom += event.wheelDelta / 2000;
@@ -214,12 +248,20 @@ $(document).ready(function() {
             btnDelete.onclick = function(event) {
                 let par = _self.focused.parent;
                 let prev = _self.prev(_self.focused);
-                _self.remove(_self.focused);
-                if (prev) {
-                    _self.focused = prev;
+                if (_self.selected.length > 0){
+                    for (let i = _self.selected.length; i--;){
+                        _self.remove(_self.selected[i]);
+                    }
+                    _self.selected = [];
                 } else {
-                    _self.focused = par;
+                    _self.remove(_self.focused);
+                    if (prev) {
+                        _self.focused = prev;
+                    } else {
+                        _self.focused = par;
+                    }
                 }
+                _self.recalc();
                 _self.refresh();
                 btnDelete.blur();
             }
@@ -274,6 +316,16 @@ $(document).ready(function() {
             }, false);            
             return this;
         }
+        set selectionRect(value){
+            this._selectionRect = value;
+            this.selectionPath.segments = [[value.topLeft, null, null],
+                                           [new Point(value.left,value.bottom), null, null],
+                                           [value.bottomRight, null, null],
+                                           [new Point(value.right,value.top),null,null]];
+        }
+        get selectionRect(){
+            return this._selectionRect;
+        }
         get info(){
             return this.infoText.content;
         }
@@ -295,6 +347,9 @@ $(document).ready(function() {
         set focused(value) {
             if (this._focused !== value) {
                 this._focused = value;
+                for (let itm of this.items.values()){
+                    itm.selected = false;
+                }
                 this.recalc();
             }
         }
@@ -417,7 +472,7 @@ $(document).ready(function() {
             let parRight = 0;
             if (cur) {
                 let par = this.find(cur.pid);
-                if (typeof par !== 'undefined')
+                if (par)
                     parRight = par.right;
             
                 cur._x = parRight + spaceH;
@@ -439,9 +494,16 @@ $(document).ready(function() {
         }
         remove(itm){ 
             if (itm !== this.root) {
+                for (let join of this.joins.values()){
+                    if ((join.srcItem === itm) || (join.dstItem === itm)){
+                        join.remove();
+                    }
+                }
                 while (this.hasChild(itm.id)) {
                     this.remove(this.firstChild(itm));
                 }
+
+                itm.selectionRect.remove();
                 itm.line.remove();
                 itm.branch.remove();
                 itm.textItem.remove();
@@ -468,9 +530,19 @@ $(document).ready(function() {
         paintJoin(join){
             let a = join.srcItem.itemRect.center.add(join.srcDelta);
             let b = join.dstItem.itemRect.center.add(join.dstDelta);
+            a.x += this.offset.x;
+            a.y += this.offset.y;
+            b.x += this.offset.x;
+            b.y += this.offset.y;
             join.path.fullySelected = (join === this.focused);
-            join.path.visible = true;
+            join.path.visible = true;            
+            join.refresh();
             drawArrow(join.path, a,b, join.h1, join.h2, join.text);
+            join.path.strokeColor.alpha = 0.8;
+            join.srcCircle.position = a;
+            join.path.bringToFront();
+            join.textPath.bringToFront()
+            join.srcCircle.bringToFront();
         }
         paint(itm){
             let self = this;
@@ -481,7 +553,7 @@ $(document).ready(function() {
             this.background.height = canvas.height;
             this.background.sendToBack();
             if (itemExpanded) {
-                //line
+                // line
                 let firstSegment = new Segment({
                     point: [this.offset.x + itm.x,this.offset.y + itm.y]
                 });
@@ -494,7 +566,6 @@ $(document).ready(function() {
                 if (typeof par !== 'undefined') {
                     let startPoint = new Point(this.offset.x + itm.x, this.offset.y+itm.y);
                     let endPoint = new Point(this.offset.x + par.right+(expanderRadius*2), this.offset.y + par.y);
-
                     let rc = new Rectangle(startPoint, endPoint);
                     let c = rc.center;
                     let h1 = new Point(c.x, this.offset.y+itm.y); 
@@ -510,7 +581,9 @@ $(document).ready(function() {
                 }
                 //text
                 itm.textItem.fillColor = textColors[themeId];
-                itm.textItem.point = [this.offset.x+ itm.x+margins.left , this.offset.y + itm.y-margins.bottom-itm.line.strokeWidth-1];
+                //itm.textItem.point = [this.offset.x+ itm.x+margins.left, itm.itemCenterPoint.y];// - ((itm.height-spaceV)/2)];//- (itm.height/2) + margins.top + margins.bottom -itm.line.strokeWidth-1];
+                itm.textItem.point = [this.offset.x + itm.x + margins.left, 
+                                      this.offset.y + itm.y - itm.textItem.bounds.height + margins.top - itm.line.strokeWidth-1];
                 itm.textItem.onClick = function(event) {
                     self.focused = itm;
                 }
@@ -519,8 +592,8 @@ $(document).ready(function() {
                 }
 
                 //rect
-                let bkRect = new Rectangle(new Point(this.offset.x+ itm.x, this.offset.y+itm.top), new Size(itm.width, itm.height-itm.line.strokeWidth-1));
-                let corner = new Size(3,3);
+                let bkRect = new Rectangle(new Point(this.offset.x + itm.x, this.offset.y + itm.top), new Size(itm.width, itm.height-itm.line.strokeWidth-1));
+                let corner = new Size(8,8);
                 itm.rect.remove();
                 itm.rect = new Path.Rectangle(bkRect, corner);
                 this.group.addChild(itm.rect);
@@ -539,6 +612,16 @@ $(document).ready(function() {
 
                 itm.line.bringToFront();
                 itm.textItem.bringToFront();
+                if (itm.selected) {
+                    itm.selectionRect.remove();
+                    itm.selectionRect = new Path.Rectangle(bkRect, corner);
+                    itm.selectionRect.strokeWidth = 3;
+                    itm.selectionRect.strokeColor = 'dodgerblue';
+                    this.group.addChild(itm.selectionRect)
+                }
+                else{
+                    itm.selectionRect.remove();
+                }
                 //expander
                 if (itm.expander) {
                     itm.expander.remove();
@@ -561,6 +644,7 @@ $(document).ready(function() {
                 else
                     itm.expanderText.content = childCount;
                 itm.expanderText.point = [this.offset.x+ itm.right+5, this.offset.y + itm.y+4];
+                //itm.expanderText.point = [itm.right+5,itm.y+4];
                 itm.expanderText.onClick = function(event) {
                     if (itm.expanderText.content !== '+') {
                         if (itm.pid !== 0) itm.expanded = !itm.expanded
@@ -616,19 +700,22 @@ $(document).ready(function() {
                     _branchColor = this.parent.branchColor;          
             }
             this.branchColor = _branchColor; 
-
+            //линия итема
             this.line = new Path({strokeColor: this.branchColor, strokeWidth: 1});
             tree.group.addChild(this.line);
-            
+            //соединение
             this.branch = new Path({strokeColor: this.branchColor, strokeWidth: 1});
             tree.group.addChild(this.branch);
-            
+            //прямоугольник
             this.rect = new Path({fillColor: 'whitesmoke'});
             tree.group.addChild(this.rect);
+            //прямоугольник выделения
+             this.selectionRect = new Path({strokeWidth:3, strokeColor: 'skyblue'});
             
+            //кнопка раскрытия
             this.expander = new Path.Circle(new Point(this.right, this.y), 8);
             tree.group.addChild(this.expander);
-            
+            //текст кнопки раскрытия
             this.expanderText = new PointText({
                 content: "0",
                 fillColor: 'black',
@@ -638,10 +725,37 @@ $(document).ready(function() {
             });
             tree.group.addChild(this.expanderText);
             
+            this.rect.onMouseDown = function(event){
+                tree.state = 'moveItem';
+                
+            }
+            
+            this.rect.onMouseUp = function(event){
+                tree.state = 'none';
+            }
             this.textItem.bringToFront;
             this.text = text;
             this._visible = true;
+            let selected = false;
+            this._selected = selected;
+            this.selected = selected;
             return this;
+        }
+        get selected(){
+            return this._selected;
+        }
+        set selected(value){
+            if (this._selected !== value) {
+                this._selected = value;
+                if (value) {
+                    this.tree.selected.push(this);
+                }
+                else {
+                    let idx = this.tree.selected.indexOf(this); 
+                    this.tree.selected.splice(idx,1);
+                }
+                this.tree.recalc();
+            }
         }
         get parent(){
             return this.tree.find(this.pid);
@@ -688,7 +802,8 @@ $(document).ready(function() {
             return this.y-this.height;
         }
         get itemRect(){
-            return new Rectangle(new Point(this.tree.offset.x+ this.x, this.tree.offset.y+this.top), new Size(this.width, this.height-this.line.strokeWidth-1));
+            // return new Rectangle(new Point(this.tree.offset.x+ this.x, this.tree.offset.y+this.top), new Size(this.width, this.height-this.line.strokeWidth-1));
+            return new Rectangle(new Point(this.x, this.top), new Size(this.width, this.height-this.line.strokeWidth-1));
         }
         get itemCenterPoint() {
             return this.itemRect.center;
@@ -737,6 +852,7 @@ $(document).ready(function() {
                 this.textItem.content = value;
                 let tw = getTextWidth(this.textItem.content, `${this.textItem.fontFamily}`, `${this.textItem.fontSize}px`,  `${this.textItem.fontWeight}`);
                 this.width = margins.left + tw.width + margins.right;
+                this.height = margins.top + tw.height + margins.bottom;
                 this.tree.recalc();
             }
         }
@@ -760,6 +876,9 @@ $(document).ready(function() {
                 this.tree.recalc();            
             }
         }
+        addChild(caption){
+            return this.tree.append(this.id, caption);
+        }
     }
     class Join{
         constructor(tree,srcItem, dstItem, toPoint, text){
@@ -775,31 +894,31 @@ $(document).ready(function() {
             
             //начальные точки в абсолютных координатах
             let srcCenter = this.srcItem.itemRect.center.clone();
-            let dstCenter = toPoint.clone();// this.dstItem.itemRect.center.clone();
-            //drawPoint(srcCenter,'yellow');
-            //drawPoint(dstCenter,'red');
+            let dstCenter = toPoint;// this.dstItem.itemRect.center.clone();
+            if (!(toPoint)) dstCenter = dstItem.itemRect.center.clone();
+
              //общий вектор
             let tempVector = dstCenter.subtract(srcCenter);
             //наклон на 45 относительно общего вектора
             let srcHandle = new Point({angle: tempVector.angle-30, length: 100});
-            let dstHandle = new Point({angle: tempVector.angle+180-30, length: 100});
+            let dstHandle = new Point({angle: tempVector.вangle+180-30, length: 100});
             this.srcHandle = srcHandle;// вершина начала в относительных координатах
             this.dstHandle = dstHandle;// вершина конца  в относительных координатах
             
             //определяем точки соприкосновения
             let tempPath = new Path();
-            //(srcCenter, toPoint);
-            tempPath.segments = [[srcCenter, null, srcHandle],[toPoint, dstHandle, null]];
 
-//            tempPath.visible = false;
-//            drawArrow(tempPath, srcCenter,toPoint, srcHandle, dstHandle);
+            tempPath.segments = [[srcCenter, null, srcHandle],[dstCenter, dstHandle, null]];
+
 
             let intersections = tempPath.getIntersections(this.srcItem.rect);
             let srcPoint = intersections[0].point.clone();
             this.srcDelta = srcPoint.subtract(srcCenter); //в относительных координатах
 
             let dstIntersections = tempPath.getIntersections(this.dstItem.rect);
-            let dstPoint = dstIntersections[dstIntersections.length-1].point.clone();
+            let dstPoint = dstItem.itemRect.center.clone();
+            if (dstIntersections.length>0)
+                dstPoint = dstIntersections[dstIntersections.length-1].point;
             this.dstDelta = dstPoint.subtract(dstItem.itemRect.center);
             
             tempPath.remove();
@@ -811,15 +930,23 @@ $(document).ready(function() {
             let fillColor = this.srcItem.branchColor;
             this.fillColor = fillColor;
 
+            //стрелка
             let path = new Path();
             drawArrow(path, srcPoint,dstPoint, srcHandle, dstHandle);
             path.strokeColor = this.fillColor;
-            path.dashArray = [3,1];
+            path.dashArray = [10,3];
             path.strokeWidth = 5;
             path.visible = true;
             this.path = path;
             tree.group.addChild(this.path);
-
+            //Круглешок в начале
+            let srcCircle = new Path.Circle({center: srcPoint, radius: 6});
+            srcCircle.fillColor = 'white'
+            srcCircle.strokeWidth = 2;
+            srcCircle.strokeColor = this.fillColor;
+            this.srcCircle = srcCircle;
+            tree.group.addChild(srcCircle);
+            //текст
             let textPath = new PointText(this.middlePoint);
             textPath.fillColor = 'white';
             textPath.justification = 'center';
@@ -830,11 +957,16 @@ $(document).ready(function() {
             textPath.onMouseDown = function(event) {
                 tree.focused = join;
             }
+            //фон текста
             let backRect = new Path.Rectangle(this.middlePoint, new Size(0,0));
             this.backRect =  backRect;
             tree.group.addChild(this.backRect); 
-
-            this.text = text;
+            if (!(text)) {
+                this.text = ''
+            } 
+            else{
+                this.text = text;
+            }
             let _self = this;
             textPath.onDoubleClick = function(event){
                 let txt = prompt('Введите текст соединения:', _self.text);
@@ -865,19 +997,15 @@ $(document).ready(function() {
             middlePath.remove();
             return middlePoint;
         }
-        get text(){
-            return this.textPath.content;
-        }
-        set text(value){
-            this.textPath.content = value;
-            //let tw = getTextWidth(this.textPath.content, `${this.textPath.fontFamily}`, `${this.textPath.fontSize}px`,  `${this.textPath.fontWeight}`);
+        refresh(){
+            this.textPath.position = this.middlePoint;
             let rc = this.textPath.bounds.clone();
             rc.left -= 5;
             rc.top -= 3;
             rc.width += 10;
             rc.height += 6;
-
-            let cornerSize = new Size (6,6);
+            
+            let cornerSize = new Size(10,10);
             this.backRect.remove();
             this.backRect = new Path.Rectangle(rc, cornerSize);
             this.backRect.strokeColor = this.fillColor;
@@ -890,6 +1018,20 @@ $(document).ready(function() {
             this.backRect.onMouseDown = function(event) {
                 tree.focused = join;
             }
+        }
+        get text(){
+            return this.textPath.content;
+        }
+        set text(value){
+            this.textPath.content = value;
+            //let tw = getTextWidth(this.textPath.content, `${this.textPath.fontFamily}`, `${this.textPath.fontSize}px`,  `${this.textPath.fontWeight}`);
+            this.refresh();
+        }
+        remove(){
+            this.path.remove();
+            this.textPath.remove();
+            this.backRect.remove();
+            this.tree.joins.delete(this.id);
         }
 
     }
@@ -926,29 +1068,57 @@ $(document).ready(function() {
                 }
                 break;
             case 'delete':
-                let par = itm.parent;
-                tree.remove(itm);
-                itm = par;
-                tree.refresh();
-                view.draw();
+                let btnDelete = document.getElementById("delete");
+                btnDelete.click();
                 break;
         }
         if (typeof itm !== 'undefined') tree.focused = itm;
         return false;
     }    
     paper.settings.handleSize = 2;
-    let item1 = tree.append(tree.root.id, "Chapter 1");
-    let item2 = tree.append(tree.root.id, "Chapter 2");
-    let item3 = tree.append(tree.root.id, "Chapter 3");
-    let item4 = tree.append(item1.id, "Item 1-1");
-    let item5 = tree.append(item1.id, "Item 1-2");
-    let item6 = tree.append(item2.id, "Item 2-1");
-    let item7 = tree.append(item2.id, "Item 2-2");
-    let item8 = tree.append(item2.id, "Item 2-3");
-    let item9 = tree.append(item7.id, "Item 2-2-1");    
-    let item10 = tree.append(item7.id, "Item 2-2-2");
-    let item11 = tree.append(item7.id, "Item 2-2-3");
-    item2.text = 'Это вторая глава книги Пески времени';
-    item6.text = '1';
+    tree.root.text = 'Варианты заявок';
+    let params = tree.append(tree.root.id, '1. Параметры варианта');
+    let prmPeriod = params.addChild('Период');
+    let prmOtv = params.addChild('Ответственный');
+    let prmSplitByItv = params.addChild('Разбить по ответственным');
+    let prmKimType = params.addChild('Типы номенклатуры');
+    let prmOnlyConfirmed = params.addChild('Только утвержденные ПП');
+    let prmRefullSZP = params.addChild('Восполнять страховые запасы');
+    let prmExWrh = params.addChild('Исключить склады');
+    let prmOnlySup = params.addChild('Только по номенклатуре поставщика');
+
+    let calcPot = tree.append(tree.root.id, '2. Выборка потребностей');
+    let copyPot = calcPot.addChild('Копируем все записи таблицы потребностей с полями \r rwc, rwc_nom, rwc_ppp, dte, trn_id');
+    let boundList = calcPot.addChild('Ограничения списка \r Удаляем всё лишнее');
+    let boundListKimTyp = boundList.addChild('Ограничение списка по типам указанных потребностей');
+    let joinKim = new Join(tree, boundListKimTyp, prmKimType, null, 'Параметры варианта');
+
+    let boundListOnlyByOtv = boundList.addChild('Ограничение списка по номенклатуре ответственного снабженца');
+    new Join(tree, boundListOnlyByOtv, prmOtv, null, null);
+    let boundListOnlyBySup = boundList.addChild('Ограниение списка по номенклатуре поставщика');
+    new Join(tree,boundListOnlyBySup, prmOnlySup, null, null);
+    let boundListOnlyConfirmed = boundList.addChild('Только по подтвержденным ПП');
+    let grpPotList = boundList.addChild('Группировка полученного списка - результат список номенклатуры');
+    let getInfoByWrh = grpPotList.addChild('Получение информации от текущем количестве по всем складам в ЕИЗ расхода');
+    getInfoByWrh.addChild('ЕИЗ');
+    getInfoByWrh.addChild('Размер страхового запаса');
+    getInfoByWrh.addChild('Текущее количество');
+    let getInfoByRzp = boundList.addChild('Ожидаемые поступления');
+    getInfoByRzp.addChild('Группировка полученных данных');
+    let lstGozPP = calcPot.addChild('Список ПП по ГОЗ');
+
+    // let item1 = tree.append(tree.root.id, "Chapter 1");
+    // let item2 = tree.append(tree.root.id, "Chapter 2");
+    // let item3 = tree.append(tree.root.id, "Chapter 3");
+    // let item4 = tree.append(item1.id, "Item 1-1");
+    // let item5 = tree.append(item1.id, "Item 1-2");
+    // let item6 = tree.append(item2.id, "Item 2-1");
+    // let item7 = tree.append(item2.id, "Item 2-2");
+    // let item8 = tree.append(item2.id, "Item 2-3");
+    // let item9 = tree.append(item7.id, "Item 2-2-1");    
+    // let item10 = tree.append(item7.id, "Item 2-2-2");
+    // let item11 = tree.append(item7.id, "Item 2-2-3");
+    // item2.text = 'Это вторая глава книги Пески времени';
+    // item6.text = '1';
     view.draw();
 });
