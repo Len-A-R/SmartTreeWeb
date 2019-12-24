@@ -10,6 +10,7 @@ $(document).ready(function() {
     const spaceH=38;
     const margins={left: 10, right: 10, top:8, bottom: 8};
     const branchColors = ['red', 'green', 'gold', 'teal', 'darkviolet', 'firebrick', 'forestgreen', 'blue', 'tomato', 'lightseagreen'];
+    const branchType = 0;
     const backgroundColors = ['white', '#282923'];
     const textColors = ['black', 'white'];
     const itemColors = ['whitesmoke', 'darkslategray'];
@@ -206,7 +207,10 @@ $(document).ready(function() {
                 if (_self.state === 'selection'){
                     _self.selectionRect = new Rectangle({from: mouseDownPoint, to: event.point});
                     for (let itm of _self.items.values()) {
-                        itm.selected = (isIntersected(_self.selectionPath, itm.rect));
+
+                        // itm.selected = _self.selectionPath.isInside(itm.itemRect);
+                        itm.selected = itm.rect.isInside(_self.selectionRect);
+                       // itm.selected = (isIntersected(_self.selectionPath, itm.rect));
                     } 
                 }
             }         
@@ -563,7 +567,7 @@ $(document).ready(function() {
                 itm.line.segments = [firstSegment, secondSegment]; 
                 itm.line.strokeWidth = 2;
                 //branch    
-                if (typeof par !== 'undefined') {
+                if (par) {
                     let startPoint = new Point(this.offset.x + itm.x, this.offset.y+itm.y);
                     let endPoint = new Point(this.offset.x + par.right+(expanderRadius*2), this.offset.y + par.y);
                     let rc = new Rectangle(startPoint, endPoint);
@@ -573,10 +577,18 @@ $(document).ready(function() {
                     if (itm.branch) itm.branch.remove();
                     itm.branch = new Path();
                     itm.branch.add(startPoint);
-                    itm.branch.cubicCurveTo(h1,h2, endPoint);
+                    if (branchType === 0) {
+                        itm.branch.cubicCurveTo(h1,h2, endPoint);
+                        //itm.branch.smooth({ type: 'continuous' });
+                    } else if (branchType === 1){
+                        itm.branch.add(endPoint);
+                    } else if (branchType === 2) {
+                        itm.branch.add(new Point(startPoint.x, endPoint.y));
+                        itm.branch.add(endPoint);
+                    }
                     itm.branch.strokeColor = itm.branchColor;
                     itm.branch.strokeWidth = 2;
-                    itm.branch.smooth({ type: 'continuous' });
+                    
                     this.group.addChild(itm.branch);
                 }
                 //text
@@ -750,10 +762,11 @@ $(document).ready(function() {
                     for (let itm of tree.items.values()){
                         if (itm.rect.contains(event.point)) {
                             if (_self !== itm) {
-                                _self.pid = itm.id;
-                                tree.refresh();
-                                break;
-                                
+                                if (!_self.isChildItem(itm)) {
+                                    _self.pid = itm.id;
+                                    tree.refresh();
+                                    break;
+                                }
                             }
                         }
                     }  
@@ -909,6 +922,15 @@ $(document).ready(function() {
         }
         addChild(caption){
             return this.tree.append(this.id, caption);
+        }
+        isChildItem(itm){
+            let par = this.tree.find(itm.pid);
+            if (par.id === this.id)
+                return true;
+            else if (par.pid !== 0)
+                return this.isChildItem(par)
+            else
+                return false;
         }
     }
     class Join{
