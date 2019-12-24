@@ -753,6 +753,7 @@ $(document).ready(function() {
                                 _self.pid = itm.id;
                                 tree.refresh();
                                 break;
+                                
                             }
                         }
                     }  
