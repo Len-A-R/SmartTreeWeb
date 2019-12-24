@@ -14,7 +14,7 @@ $(document).ready(function() {
     const textColors = ['black', 'white'];
     const itemColors = ['whitesmoke', 'darkslategray'];
     const treeStates = ['none', 'newjoin'];
-    var themeId = 0;
+    var themeId = 1;
     var idCounter = 0;
     var joinCounter = 0;
     var canvas = document.getElementById('myCanvas');
@@ -715,6 +715,7 @@ $(document).ready(function() {
             //кнопка раскрытия
             this.expander = new Path.Circle(new Point(this.right, this.y), 8);
             tree.group.addChild(this.expander);
+
             //текст кнопки раскрытия
             this.expanderText = new PointText({
                 content: "0",
@@ -724,16 +725,45 @@ $(document).ready(function() {
                 fontSize: 12,
             });
             tree.group.addChild(this.expanderText);
-            
-            this.rect.onMouseDown = function(event){
-                tree.state = 'moveItem';
-                
-            }
-            
-            this.rect.onMouseUp = function(event){
-                tree.state = 'none';
-            }
-            this.textItem.bringToFront;
+
+            let _self = this;
+
+            this.textItem.bringToFront();
+            let movingPath;
+            this.textItem.onMouseDrag = function(event){
+                if (!movingPath){
+                    tree.state = 'moveItem';
+                    movingPath = _self.rect.clone();
+                    if (movingPath.fillColor) movingPath.fillColor.alpha = 0.5;
+                    if (movingPath.strokeColor) movingPath.strokeColor.alpha = 0.5;
+                    movingPath.bringToFront();                        
+                }
+                if (tree.state === 'moveItem'){
+                    movingPath.position.x += event.delta.x;
+                    movingPath.position.y += event.delta.y;
+                    _tree.info = movingPath.position;
+                }
+            }     
+            this.textItem.onMouseUp = function(event){
+                if (tree.state === 'moveItem'){
+                    
+                    for (let itm of tree.items.values()){
+                        if (itm.rect.contains(event.point)) {
+                            if (_self !== itm) {
+                                _self.pid = itm.id;
+                                tree.refresh();
+                                break;
+                            }
+                        }
+                    }  
+                    tree.state = 'none';
+                }
+                if (movingPath) {
+                    movingPath.remove();
+                    movingPath = null;
+                }
+            }  
+     
             this.text = text;
             this._visible = true;
             let selected = false;
