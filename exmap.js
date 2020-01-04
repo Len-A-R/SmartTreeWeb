@@ -22,7 +22,7 @@ $(document).ready(function() {
     var ctx = canvas.getContext("2d");
     var branchColorNum = -1;
     var joinFrom;
-  
+
     var isNaN = function(x,y) {
         if (x !== x) 
             return y
@@ -121,6 +121,9 @@ $(document).ready(function() {
             this.background = new Path.Rectangle(new Rectangle(new Point(0,0), new Size(canvas.width,canvas.height)));
             this.background.fillColor = backgroundColors[themeId];
             this.state = 'none';
+            let dragStatus = 'none';
+            this._dragStatus = dragStatus;
+            this.dragStatus = dragStatus;
             let selected = [];
             this.selected = selected;
             
@@ -167,10 +170,14 @@ $(document).ready(function() {
                 let join;
                 clearTimeout(pressTimer);
                 if (_self.state === 'newjoin'){
+                    let offsetPoint = event.point.clone();
+                    offsetPoint.x -= _self.offset.x;
+                    offsetPoint.y -= _self.offset.y;
                     let dstItem = _self.mouseOnItem(event.point);
                     if (dstItem) {
                         let txt = prompt('Введите текст', 'New join');
-                        join = new Join(_self, _self.focused, dstItem, event.point, txt);
+                        let mousePoint = event.point.clone();
+                        join = new Join(_self, _self.focused, dstItem, mousePoint, txt);
                     }
                     _self.state = 'none';
                     _newJoin.visible = false;
@@ -186,6 +193,8 @@ $(document).ready(function() {
                 _self.info = event.point;
                 if (_self.state === 'newjoin') {
                     let a = joinFrom.itemRect.center;
+                    a.x =a.x + tree.offset.x;
+                    a.y =a.y + tree.offset.y;
                     let b = event.point;
                     _newJoin.dashArray = [10,4];
                     _newJoin.strokeWidth = 3;
@@ -320,6 +329,26 @@ $(document).ready(function() {
             }, false);            
             return this;
         }
+        set dragStatus(value) {
+            this._dragStatus = value;
+            if (value === 'start') {
+                document.body.style.cursor = 'grab'
+            }
+            if (value === 'move') {
+                document.body.style.cursor = 'grabbing'
+            }
+            else if (value === 'allow') {
+                document.body.style.cursor = 'pointer'
+            }
+            else if (value === 'deny') {
+                document.body.style.cursor= 'no-drop'
+            }  
+            else
+                document.body.style.cursor = 'default';          
+        }
+        get dragStatus(){
+            return this._dragStatus;
+        }
         set selectionRect(value){
             this._selectionRect = value;
             this.selectionPath.segments = [[value.topLeft, null, null],
@@ -409,8 +438,11 @@ $(document).ready(function() {
             }
         }
         mouseOnItem(point) {
+            let offsetPoint = point.clone();
+            offsetPoint.x -= this.offset.x;
+            offsetPoint.y -= this.offset.y;
             for (let itm of this.items.values()){
-                if (itm.itemRect.contains(point))
+                if (itm.itemRect.contains(offsetPoint))
                     return itm;
             }
         }
@@ -444,11 +476,19 @@ $(document).ready(function() {
         }
         getOuterTop(id){
             let pid = this.getPid(id);
+
             let parOutTop = 0;
             let regTop = 0;
             if (pid !== 0) {
                 parOutTop = this.getOuterTop(pid);
                 regTop = this.getRegardTop(id);
+            }
+            else {
+                let itm = this.find(id);
+                if (itm)
+                    if (itm.isFlow){
+                        parOutTop = itm.top - ((itm.outerHeight - itm.height)/ 2);
+                    }
             }
             return parOutTop + regTop;
         }
@@ -476,11 +516,13 @@ $(document).ready(function() {
             let parRight = 0;
             if (cur) {
                 let par = this.find(cur.pid);
-                if (par)
+                if (par) {
                     parRight = par.right;
-            
-                cur._x = parRight + spaceH;
-                cur._y = cur.outerTop + ((cur.outerHeight + cur.height)/2);
+                
+                    cur._x = parRight + spaceH;
+                    cur._y = cur.outerTop + ((cur.outerHeight + cur.height)/2);
+                }
+
                 this.paint(cur);
                 if (this.hasChild(id)) {
                     for (let child of this.items.values()) {
@@ -521,6 +563,11 @@ $(document).ready(function() {
             if (this.root) {
                 this.calc(this.root.id);
             }
+            for (let itm of this.items.values()){
+                if (!itm.parent) {
+                    this.calc(itm.id);
+                } 
+            }
             for (let join of this.joins.values()) 
                 this.paintJoin(join);
         }
@@ -538,7 +585,7 @@ $(document).ready(function() {
             a.y += this.offset.y;
             b.x += this.offset.x;
             b.y += this.offset.y;
-            join.path.fullySelected = (join === this.focused);
+            join.path.fullySelected = ((join) && (join === this.focused));
             join.path.visible = true;            
             join.refresh();
             drawArrow(join.path, a,b, join.h1, join.h2, join.text);
@@ -553,9 +600,11 @@ $(document).ready(function() {
             let par = itm.parent;
             let itemExpanded = itm.parentExpanded;
             init();
-            this.background.width = canvas.width;
-            this.background.height = canvas.height;
-            this.background.sendToBack();
+            if (this.background) {
+                this.background.width = canvas.width;
+                this.background.height = canvas.height;
+                this.background.sendToBack();
+            }
             if (itemExpanded) {
                 // line
                 let firstSegment = new Segment({
@@ -617,9 +666,11 @@ $(document).ready(function() {
                 itm.rect.onDoubleClick = function(event) {
                     self.editText(itm);
                 }
-                if (itm.id === this.focused.id) {
-                    itm.rect.strokeColor = 'goldenrod';
-                    itm.rect.strokeWidth = 2;
+                if (this.focused) {
+                    if (itm.id === this.focused.id) {
+                        itm.rect.strokeColor = 'goldenrod';
+                        itm.rect.strokeWidth = 2;
+                    }
                 }
 
                 itm.line.bringToFront();
@@ -719,7 +770,8 @@ $(document).ready(function() {
             this.branch = new Path({strokeColor: this.branchColor, strokeWidth: 1});
             tree.group.addChild(this.branch);
             //прямоугольник
-            this.rect = new Path({fillColor: 'whitesmoke'});
+            let _rect = new Path({fillColor: 'whitesmoke'});
+            this.rect = _rect;
             tree.group.addChild(this.rect);
             //прямоугольник выделения
              this.selectionRect = new Path({strokeWidth:3, strokeColor: 'skyblue'});
@@ -742,18 +794,35 @@ $(document).ready(function() {
 
             this.textItem.bringToFront();
             let movingPath;
+            let deltaOnItemMouseDown;
+            this.textItem.onMouseDown = function(event){
+                deltaOnItemMouseDown = new Point(event.point.x - _self.x + tree.offset.x, event.point.y - _self.y + tree.offset.y);
+            }
+
             this.textItem.onMouseDrag = function(event){
                 if (!movingPath){
                     tree.state = 'moveItem';
                     movingPath = _self.rect.clone();
                     if (movingPath.fillColor) movingPath.fillColor.alpha = 0.5;
                     if (movingPath.strokeColor) movingPath.strokeColor.alpha = 0.5;
+                    tree.dragStatus = 'start';
                     movingPath.bringToFront();                        
                 }
                 if (tree.state === 'moveItem'){
                     movingPath.position.x += event.delta.x;
                     movingPath.position.y += event.delta.y;
                     _tree.info = movingPath.position;
+
+                    let localMovingStatus = 'move';
+                    for (let itm of tree.items.values()){
+                        if (itm.rect.contains(event.point)) {
+                            localMovingStatus = 'allow';
+                            if ((_self === itm) || (_self.isChildItem(itm))) {
+                                localMovingStatus = 'deny';
+                            }
+                        }
+                    } 
+                    tree.dragStatus = localMovingStatus; 
                 }
             }     
             this.textItem.onMouseUp = function(event){
@@ -769,8 +838,17 @@ $(document).ready(function() {
                                 }
                             }
                         }
-                    }  
+                    }
+                    //плавающий топик  
+                    if (tree.dragStatus === 'move'){
+                        _self.pid = 0;
+                        _self.branch.visible = false;
+                        _self.x = tree.offset.x + event.point.x - deltaOnItemMouseDown.x;
+                        _self.y = tree.offset.y + event.point.y - deltaOnItemMouseDown.y;
+                        tree.recalc();
+                    }
                     tree.state = 'none';
+                    tree.dragStatus = 'none';
                 }
                 if (movingPath) {
                     movingPath.remove();
@@ -784,6 +862,9 @@ $(document).ready(function() {
             this._selected = selected;
             this.selected = selected;
             return this;
+        }
+        isFlow(){
+            return (this.pid === 0) && (this.id !== 1)
         }
         get selected(){
             return this._selected;
@@ -925,8 +1006,10 @@ $(document).ready(function() {
         }
         isChildItem(itm){
             let par = this.tree.find(itm.pid);
-            if (par.id === this.id)
-                return true;
+            if (!par) 
+                return false
+            else if (par.id === this.id)
+                return true
             else if (par.pid !== 0)
                 return this.isChildItem(par)
             else
@@ -946,15 +1029,16 @@ $(document).ready(function() {
             this.dstItem = _dstItem;
             
             //начальные точки в абсолютных координатах
-            let srcCenter = this.srcItem.itemRect.center.clone();
-            let dstCenter = toPoint;// this.dstItem.itemRect.center.clone();
-            if (!(toPoint)) dstCenter = dstItem.itemRect.center.clone();
+            let srcCenter = this.srcItem.rect.bounds.center.clone();
+            let dstCenter = this.dstItem.rect.bounds.center.clone();
+        
+            if (toPoint) dstCenter = toPoint;
 
              //общий вектор
             let tempVector = dstCenter.subtract(srcCenter);
             //наклон на 45 относительно общего вектора
             let srcHandle = new Point({angle: tempVector.angle-30, length: 100});
-            let dstHandle = new Point({angle: tempVector.вangle+180-30, length: 100});
+            let dstHandle = new Point({angle: tempVector.angle+180-30, length: 100});
             this.srcHandle = srcHandle;// вершина начала в относительных координатах
             this.dstHandle = dstHandle;// вершина конца  в относительных координатах
             
@@ -963,16 +1047,17 @@ $(document).ready(function() {
 
             tempPath.segments = [[srcCenter, null, srcHandle],[dstCenter, dstHandle, null]];
 
-
-            let intersections = tempPath.getIntersections(this.srcItem.rect);
-            let srcPoint = intersections[0].point.clone();
+            let srcPoint = srcCenter;
+            let intersections = srcItem.rect.getIntersections(tempPath);
+            if (intersections.length>0)
+                srcPoint = intersections[0].point.clone();
             this.srcDelta = srcPoint.subtract(srcCenter); //в относительных координатах
 
-            let dstIntersections = tempPath.getIntersections(this.dstItem.rect);
-            let dstPoint = dstItem.itemRect.center.clone();
+            let dstIntersections = dstItem.rect.getIntersections(tempPath);
+            let dstPoint = dstItem.rect.bounds.center;
             if (dstIntersections.length>0)
-                dstPoint = dstIntersections[dstIntersections.length-1].point;
-            this.dstDelta = dstPoint.subtract(dstItem.itemRect.center);
+                dstPoint = dstIntersections[0].point.clone();
+            this.dstDelta = dstPoint.subtract(dstItem.rect.bounds.center);
             
             tempPath.remove();
 
@@ -985,6 +1070,8 @@ $(document).ready(function() {
 
             //стрелка
             let path = new Path();
+            srcPoint = srcPoint.subtract(tree.offset);
+            dstPoint = dstPoint.subtract(tree.offset);
             drawArrow(path, srcPoint,dstPoint, srcHandle, dstHandle);
             path.strokeColor = this.fillColor;
             path.dashArray = [10,3];
