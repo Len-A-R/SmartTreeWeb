@@ -1044,7 +1044,6 @@ $(document).ready(function() {
             
             //определяем точки соприкосновения
             let tempPath = new Path();
-
             tempPath.segments = [[srcCenter, null, srcHandle],[dstCenter, dstHandle, null]];
 
             let srcPoint = srcCenter;
