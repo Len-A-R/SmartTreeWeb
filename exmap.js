@@ -30,6 +30,13 @@ $(document).ready(function() {
             return x; 
     };
 
+    function addPoint(a,b) {
+        let result = new Point(0,0);
+        result.x = a.x + b.x;
+        result.y = a.y + b.y;
+        return result;
+    }
+
     function newId(){
         idCounter += 1;
         return idCounter;
@@ -82,7 +89,7 @@ $(document).ready(function() {
     function isIntersected(path1, path2){
         return ((path1.getIntersections(path2).length > 0) || path1.contains(path2.bounds));
     }
-    function drawArrow(path, a,b, h1, h2, event){
+    function drawArrow(path, a,b, h1, h2){
         let vector = b.subtract(a);
         let v1 = h1;
         let v2 = h2;
@@ -120,7 +127,6 @@ $(document).ready(function() {
             this._focused = this.root;
             this.background = new Path.Rectangle(new Rectangle(new Point(0,0), new Size(canvas.width,canvas.height)));
             this.background.fillColor = backgroundColors[themeId];
-            this.state = 'none';
             let dragStatus = 'none';
             this._dragStatus = dragStatus;
             this.dragStatus = dragStatus;
@@ -136,10 +142,23 @@ $(document).ready(function() {
                 fontSize: 12,
                 position: [30,30],
             });
-
+            //текст
+            let infoSecondText_ = new PointText({
+                content: "",
+                fillColor: 'yellow',
+                fontFamily: "Calibri",
+                fontWeight: "",
+                fontSize: 12,
+                position: [30,50],
+            });
             this.infoText = infoText_;
+            this.infoSecondText = infoSecondText_;
 
             this.info = 'здесь информация'; 
+            this.infoSecond = 'текущее состояние';
+            this._state = '';
+            this.state = 'none';
+
             let _newJoin = new Path();
             let _self = this;
 
@@ -155,6 +174,7 @@ $(document).ready(function() {
             selectionPath.fillColor.alpha = 0.5;
             this._selectionRect = _selectionRect;
             this.selectionRect = _self._selectionRect;
+
             let mouseDownPoint = new Point(0,0);
             let pressTimer;
             let doMouseDown = function(event){
@@ -193,8 +213,8 @@ $(document).ready(function() {
                 _self.info = event.point;
                 if (_self.state === 'newjoin') {
                     let a = joinFrom.itemRect.center;
-                    a.x =a.x + tree.offset.x;
-                    a.y =a.y + tree.offset.y;
+                    a.x += tree.offset.x;
+                    a.y += tree.offset.y;
                     let b = event.point;
                     _newJoin.dashArray = [10,4];
                     _newJoin.strokeWidth = 3;
@@ -365,10 +385,23 @@ $(document).ready(function() {
         set info(value) {
             this.infoText.content = value;
         }
+        get infoSecond(){
+            return this.infoSecondText.content;
+        }
+        set infoSecond(value) {
+            this.infoSecondText.content = value;
+        }        
+        get state(){
+            return this._state;
+        }
+        set state(value){
+            this._state = value;
+            this.infoSecond = value;
+        }
         get offset() {
             return this._offset;
         }
-        set ofsset(value) {
+        set offset(value) {
             this._offset = value;
             for (let itm of items.values()) {
                 this.paint(itm);
@@ -379,10 +412,23 @@ $(document).ready(function() {
         }
         set focused(value) {
             if (this._focused !== value) {
+                if (this._focused instanceof Join) {
+                    this._focused.startJoinHandle.visible = false;
+                    this._focused.finishJoinHandle.visible = false;
+                }
                 this._focused = value;
                 for (let itm of this.items.values()){
                     itm.selected = false;
                 }
+                if (value instanceof Join) {
+                    // value.h1 = value.h1;
+                    // value.h2 = value.h2;
+
+                    value.startJoinHandle.position = value.handleStartPoint; 
+                    value.finishJoinHandle.position = value.handleFinishPoint;
+                    value.startJoinHandle.visible = true;
+                    value.finishJoinHandle.visible = true;
+                }                
                 this.recalc();
             }
         }
@@ -579,14 +625,15 @@ $(document).ready(function() {
                 this.paintJoin(join);
         }
         paintJoin(join){
-            let a = join.srcItem.itemRect.center.add(join.srcDelta);
-            let b = join.dstItem.itemRect.center.add(join.dstDelta);
-            a.x += this.offset.x;
-            a.y += this.offset.y;
-            b.x += this.offset.x;
-            b.y += this.offset.y;
+            let a = join.srcItem.rect.bounds.center.add(join.srcDelta);
+            let b = join.dstItem.rect.bounds.center.add(join.dstDelta);
+
             join.path.fullySelected = ((join) && (join === this.focused));
             join.path.visible = true;            
+            if (join.path.fullySelected) {
+                //join.path.segments[0]
+                
+            }
             join.refresh();
             drawArrow(join.path, a,b, join.h1, join.h2, join.text);
             join.path.strokeColor.alpha = 0.8;
@@ -594,6 +641,8 @@ $(document).ready(function() {
             join.path.bringToFront();
             join.textPath.bringToFront()
             join.srcCircle.bringToFront();
+            join.startJoinHandle.bringToFront();
+            join.finishJoinHandle.bringToFront();            
         }
         paint(itm){
             let self = this;
@@ -1036,7 +1085,7 @@ $(document).ready(function() {
 
              //общий вектор
             let tempVector = dstCenter.subtract(srcCenter);
-            //наклон на 45 относительно общего вектора
+            //наклон на 30 относительно общего вектора
             let srcHandle = new Point({angle: tempVector.angle-30, length: 100});
             let dstHandle = new Point({angle: tempVector.angle+180-30, length: 100});
             this.srcHandle = srcHandle;// вершина начала в относительных координатах
@@ -1099,6 +1148,9 @@ $(document).ready(function() {
             //фон текста
             let backRect = new Path.Rectangle(this.middlePoint, new Size(0,0));
             this.backRect =  backRect;
+            this.backRect.onMouseDown = function(event) {
+                tree.focused = join;
+            }
             tree.group.addChild(this.backRect); 
             if (!(text)) {
                 this.text = ''
@@ -1120,8 +1172,83 @@ $(document).ready(function() {
                 let txt = prompt('Введите текст соединения:', _self.text);
                 if ((_self.text !== txt) && (txt !== null))
                     _self.text = txt;
+            }  
+            let startJoinHandle = new Path.Circle(new Point(0,0), 10);
+            startJoinHandle.strokeColor = 'red';
+            startJoinHandle.strokeWidth = 2;
+            startJoinHandle.fillColor = 'white';
+            startJoinHandle.fillColor.alpha = 0.5;
+            startJoinHandle.visible = false;
+            startJoinHandle.onMouseDown = function(event){
+                tree.state = 'handle';
+            }
+            startJoinHandle.onMouseDrag = function(event){
+                tree.state = 'handle';
+                startJoinHandle.position.x += event.delta.x;
+                startJoinHandle.position.y += event.delta.y;
+
+                path.segments[0].handleOut.x += event.delta.x;
+                path.segments[0].handleOut.y += event.delta.y;
+                _self.refresh();
+            }
+            startJoinHandle.onMouseUp = function(event){
+                tree.state = 'none';
+            }
+            this.startJoinHandle = startJoinHandle;
+
+            let finishJoinHandle = new Path.Circle(new Point(0,0), 10);
+            finishJoinHandle.strokeColor = 'yellow';
+            finishJoinHandle.strokeWidth = 2;
+            finishJoinHandle.fillColor = 'white';
+            finishJoinHandle.fillColor.alpha = 0.5;
+            finishJoinHandle.visible = false;
+            finishJoinHandle.onMouseUp = function(event){
+                tree.state = 'handle';
+            }
+            finishJoinHandle.onMouseDrag = function(event){
+                tree.state = 'handle';
+                finishJoinHandle.position.x += event.delta.x;
+                finishJoinHandle.position.y += event.delta.y;
+
+                path.segments[1].handleIn.x += event.delta.x;
+                path.segments[1].handleIn.y += event.delta.y;
+                drawArrow(path,path.segments[0].point, path.segments[1].point, _self.h1, _self.h2);
+                _self.refresh();
+            }
+            finishJoinHandle.onMouseUp = function(event){
+                tree.state = 'none';
             }            
+            this.finishJoinHandle = finishJoinHandle;
+            tree.group.addChild(startJoinHandle);
+            startJoinHandle.bringToFront();
+
+            tree.group.addChild(finishJoinHandle);
+            finishJoinHandle.bringToFront();
             return this;
+        }
+        get h1(){
+            return this.path.segments[0].handleOut;
+        }
+        get h2(){
+            return this.path.segments[1].handleIn;
+        }
+        get handleStartPoint(){
+            return new Point(this.path.segments[0].point.x + this.h1.x, this.path.segments[0].point.y + this.h1.y);
+        }
+        get handleFinishPoint(){
+            return new Point(this.path.segments[1].point.x + this.h2.x, this.path.segments[1].point.y + this.h2.y);
+        }
+        set h1(value){
+            this.path.segments[0].handleOut = value;
+            let startPoint = this.path.segments[0].point.clone();
+            startPoint = startPoint.add(this.path.segments[0].handleOut);
+            this.startJoinHandle.position = startPoint;            
+        }
+        set h2(value){
+            this.path.segments[1].handleIn = value;
+            let finishPoint = this.path.segments[1].point.clone();
+            finishPoint = finishPoint.add(this.path.segments[1].handleIn);
+            this.finishJoinHandle.position = finishPoint;            
         }
         get dstItem(){
             return this._dstItem;
@@ -1131,10 +1258,18 @@ $(document).ready(function() {
 
         }
         get middlePoint(){
-            let middlePath = this.path.splitAt(this.path.length/2);
+            let path_ = this.path.clone();
+            let middlePath = path_.splitAt(this.path.length/2);
             let middlePoint = middlePath.firstSegment.point.clone();
             middlePath.remove();
+            path_.remove();
             return middlePoint;
+        }
+        get startPoint(){
+            return this.path.segments[0].point;
+        }
+        get finishPoint(){
+            return this.path.segments[1].point;
         }
         refresh(){
             this.textPath.position = this.middlePoint;
@@ -1154,9 +1289,6 @@ $(document).ready(function() {
             this.backRect.insertBelow(this.textPath);
             let tree = this.tree;
             let join = this;
-            this.backRect.onMouseDown = function(event) {
-                tree.focused = join;
-            }
         }
         get text(){
             return this.textPath.content;
