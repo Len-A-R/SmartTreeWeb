@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html" ;="" charset="utf-8">
+    <title>SmartTree - TEST</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <script type="text/javascript" src="./stclass.js"></script>
+    <script type="text/javascript">
+        let tree = new Tree();
+        let central = tree.root.addChild('CENTRAL TOPIC');
+        let firstTopic = central.addChild('First Topic');
+        let firstSubTopic = firstTopic.addChild('First Sub Topic');
+        firstTopic.addChild('Second Sub Topic');
+        firstTopic.addChild('Three Sub Topic');
+        let subSubTopic = firstSubTopic.addChild('Sub Sub Topic');
+        let helloTopic = central.addChild('hello');
+        helloTopic.addChild('Ivan');
+        helloTopic.addChild('Petr');
+        helloTopic.addChild('Sidr');
+
+        let str = tree.asString();
+        alert(str);
+    </script>
+</head>
+
+<body>
+
+</body>
+
+</html>

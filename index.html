@@ -1,43 +1,47 @@
 <!DOCTYPE html>
 <html>
-	<head>
-		<meta http-equiv="Content-Type" content="text/html" ;="" charset="utf-8">
-		<title>SmartTree - Smart MindMap</title>
-		<link rel="stylesheet" type="text/css" href="style.css">
-		<meta content="width=device-width, initial-scale=1" name="viewport"/>
-		<link href="https://uploads-ssl.webflow.com/5dc16a869cf4712023b88db1/css/igors-blank-site-aa5034.webflow.a5d12d697.css" rel="stylesheet" type="text/css"/>
-		<script type="text/javascript">
-		    !function(o, c) {
-		        var n = c.documentElement
-		          , t = " w-mod-";
-		        n.className += t + "js",
-		        ("ontouchstart"in o || o.DocumentTouch && c instanceof DocumentTouch) && (n.className += t + "touch")
-		    }(window, document);
-		</script>
-        <link href="https://uploads-ssl.webflow.com/img/favicon.ico" rel="shortcut icon" type="image/x-icon"/>
-        <link href="https://uploads-ssl.webflow.com/img/webclip.png" rel="apple-touch-icon"/>		
-		<script type="text/javascript" src="js/jquery.js"></script>
-		<script type="text/javascript" src="js/paper-full.js"></script>
-		<script type="text/javascript" src="exmap.js"></script>
-	</head>
-	<body>
-        <div>
-            <div class="w-layout-grid grid" id="toolbar">
-                <button href="#" class="w-button" id="addSibling">Add sibling</button>
-                <button href="#" class="w-button" id="addChild">Add child</button>
-                <button href="#" class="w-button" id="addJoin">Add join</button>
-                <button href="#" class="w-button" id="editText">Edit text</button>
-                <button href="#" class="w-button" id="delete">Delete</button>
-            </div>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html" ;="" charset="utf-8">
+    <title>SmartTree - Smart MindMap</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+
+    <script type="text/javascript">
+        ! function(o, c) {
+            var n = c.documentElement,
+                t = " w-mod-";
+            n.className += t + "js",
+                ("ontouchstart" in o || o.DocumentTouch && c instanceof DocumentTouch) && (n.className += t + "touch")
+        }(window, document);
+    </script>
+    <link href="https://uploads-ssl.webflow.com/img/favicon.ico" rel="shortcut icon" type="image/x-icon" />
+    <link href="https://uploads-ssl.webflow.com/img/webclip.png" rel="apple-touch-icon" />
+    <script type="text/javascript" src="js/jquery.js"></script>
+    <script type="text/javascript" src="js/paper-full.js"></script>
+    <script type="text/javascript" src="exmap.js"></script>
+</head>
+
+<body>
+    <div>
+        <div class="toolbar grid" id="toolbar">
+            <a href="#" class="toolbutton" id="saveToFile">Save</a>
+            <a href="#" class="toolbutton" id="addSibling">Add sibling</a>
+            <a href="#" class="toolbutton" id="addChild">Add child</a>
+            <a href="#" class="toolbutton" id="addJoin">Add join</a>
+            <a href="#" class="toolbutton" id="editText">Edit text</a>
+            <a href="#" class="toolbutton" id="delete">Delete</a>
         </div>
-        <script src="https://d3e54v103j8qbb.cloudfront.net/js/jquery-3.4.1.min.220afd743d.js" type="text/javascript" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
-        <script src="https://uploads-ssl.webflow.com/5dc16a869cf4712023b88db1/js/webflow.454736d9e.js" type="text/javascript"></script>	
-		<canvas id="myCanvas" width="100%" height="100%" tabindex=1 resize style=
-		    "border: 0px solid; 
+    </div>
+    <script src="https://d3e54v103j8qbb.cloudfront.net/js/jquery-3.4.1.min.220afd743d.js" type="text/javascript" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+    <div id="dropfile">
+        <canvas id="myCanvas" width="100%" height="100%" tabindex=1 resize style="border: 0px solid; 
 		    user-select: none; 
 		    touch-action: auto; 
 		    -webkit-user-drag: none; 
 		    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);">
-		</canvas>        
-	</body>
+        </canvas>
+    </div>
+</body>
+
 </html>
